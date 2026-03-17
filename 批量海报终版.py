@@ -2,33 +2,10 @@
  "cells": [
   {
    "cell_type": "code",
-   "execution_count": 1,
-   "id": "50c2dd22-f1b0-486f-b367-6ddd0344b9a3",
+   "execution_count": null,
+   "id": "487ad82a-4858-4ddb-bf4d-6eed0a878391",
    "metadata": {},
-   "outputs": [
-    {
-     "name": "stdout",
-     "output_type": "stream",
-     "text": [
-      "📑 读取到 13 条数据\n",
-      "✅ 已生成海报: 上海浦发银行女篮VS山东赤水河酒女篮 (2025-12-21 19:30:00)\n",
-      "✅ 已生成海报: 2025“冠军摇篮杯”青少年网球赛 (2025-12-20 08:00:00)\n",
-      "✅ 已生成海报: 2025“冠军摇篮杯”青少年网球赛 (2025-12-21 08:00:00)\n",
-      "✅ 已生成海报: 双旦挑战赛亲子活动 (2025-12-20 13:00:00)\n",
-      "✅ 已生成海报: 2025年杨浦区学生阳光体育大联赛中小学生足球比赛 (2025-12-20 09:00:00)\n",
-      "✅ 已生成海报: 2025年杨浦区学生阳光体育大联赛中小学生足球比赛 (2025-12-21 09:00:00)\n",
-      "✅ 已生成海报: 2025年杨浦区学生阳光体育大联赛中小学生足球比赛 (2025-12-21 09:00:00)\n",
-      "✅ 已生成海报: 2025年度上海燃气浦东销售有限公司职工卡丁车比赛 (2025-12-23 12:00:00)\n",
-      "✅ 已生成海报: 2025-2026学年上海市中小学生羽毛球锦标赛 (2025-12-20 10:00:00)\n",
-      "✅ 已生成海报: 2025-2026学年上海市中小学生羽毛球锦标赛 (2025-12-21 10:00:00)\n",
-      "✅ 已生成海报: 幸福东航杯 上海地区职工羽毛球比赛 (2025-12-23 08:30:00)\n",
-      "✅ 已生成海报: 幸福东航杯 上海地区职工羽毛球比赛 (2025-12-24 08:30:00)\n",
-      "✅ 已生成海报: 2025年第九届“跆协杯”上海市跆拳道联赛总决赛 (2025-12-20 07:30:00)\n",
-      "\n",
-      "🎉 所有海报已生成！请查看 output 文件夹\n"
-     ]
-    }
-   ],
+   "outputs": [],
    "source": [
     "from PIL import Image, ImageDraw, ImageFont\n",
     "import pandas as pd\n",
@@ -50,7 +27,7 @@
     "POSTER_WIDTH = 750\n",
     "\n",
     "# 接口前缀\n",
-    "SIGN_API_PREFIX = \"输入你的接口前缀\"\n",
+    "SIGN_API_PREFIX = \"你的接口\"\n",
     "\n",
     "# ==== 函数：自动换行绘制文字 ====\n",
     "def draw_wrap_text(draw, text, font, x, y, max_width, fill=\"#000000\"):\n",
@@ -85,7 +62,7 @@
     "for idx, row in df.iterrows():\n",
     "    title = str(row['title'])\n",
     "    date = str(row['date'])\n",
-    "    number = str(row['number'])  # 新增————直播间号\n",
+    "    number = str(row['number'])  # 新增————编号\n",
     "    link = str(row['link'])\n",
     "    kv_base_url = str(row['kv_image_name'])  # Excel 中存的 URL 前半段\n",
     "\n",
@@ -126,7 +103,7 @@
     "    text_y = new_h + 35\n",
     "    text_y = draw_wrap_text(draw=draw_temp, text=title, font=font_title, x=LEFT_MARGIN, y=text_y, max_width=POSTER_WIDTH - 2*LEFT_MARGIN)\n",
     "    text_y = draw_wrap_text(draw=draw_temp, text=date, font=font_date, x=LEFT_MARGIN, y=text_y + 5, max_width=POSTER_WIDTH - 2*LEFT_MARGIN)\n",
-    "    text_y = draw_wrap_text(draw=draw_temp, text=f\"直播间号:{number}\", font=font_number, x=LEFT_MARGIN, y=text_y + 5, max_width=POSTER_WIDTH - 2*LEFT_MARGIN)\n",
+    "    text_y = draw_wrap_text(draw=draw_temp, text=f\"编号:{number}\", font=font_number, x=LEFT_MARGIN, y=text_y + 5, max_width=POSTER_WIDTH - 2*LEFT_MARGIN)\n",
     "\n",
     "    # 二维码和固定文案高度\n",
     "    qr_size = 400\n",
@@ -145,7 +122,7 @@
     "    text_y = new_h + 35\n",
     "    text_y = draw_wrap_text(draw=draw, text=title, font=font_title, x=LEFT_MARGIN, y=text_y, max_width=POSTER_WIDTH - 2*LEFT_MARGIN, fill=\"#333333\")\n",
     "    text_y = draw_wrap_text(draw=draw, text=date, font=font_date, x=LEFT_MARGIN, y=text_y + 5, max_width=POSTER_WIDTH - 2*LEFT_MARGIN, fill=\"#999999\")\n",
-    "    text_y = draw_wrap_text(draw=draw, text=f\"直播间号:{number}\", font=font_number, x=LEFT_MARGIN, y=text_y + 5, max_width=POSTER_WIDTH - 2*LEFT_MARGIN, fill=\"#999999\")\n",
+    "    text_y = draw_wrap_text(draw=draw, text=f\"编号:{number}\", font=font_number, x=LEFT_MARGIN, y=text_y + 5, max_width=POSTER_WIDTH - 2*LEFT_MARGIN, fill=\"#999999\")\n",
     "\n",
     "    # 二维码\n",
     "    qr = qrcode.make(link)\n",
@@ -154,7 +131,7 @@
     "    poster.paste(qr, ((POSTER_WIDTH - qr_size)//2, qr_y))\n",
     "\n",
     "    # 固定文案居中\n",
-    "    tips_text = \"填入你的文案\"\n",
+    "    tips_text = \"扫码观看\"\n",
     "    bbox = draw.textbbox((0,0), tips_text, font=font_tips)\n",
     "    tw = bbox[2] - bbox[0]\n",
     "    draw.text(((POSTER_WIDTH - tw)//2, qr_y + qr_size + 15), tips_text, font=font_tips, fill=\"#999999\")\n",
@@ -177,7 +154,7 @@
   {
    "cell_type": "code",
    "execution_count": null,
-   "id": "3c34fb6c-a619-41b8-8b57-fd8c48a91904",
+   "id": "ef36c065-fa08-4a02-8a05-a646980fa9f3",
    "metadata": {},
    "outputs": [],
    "source": []
