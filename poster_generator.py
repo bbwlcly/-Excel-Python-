@@ -1,184 +1,163 @@
-{
- "cells": [
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "487ad82a-4858-4ddb-bf4d-6eed0a878391",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "from PIL import Image, ImageDraw, ImageFont\n",
-    "import pandas as pd\n",
-    "import qrcode\n",
-    "import requests\n",
-    "import io\n",
-    "import os\n",
-    "import json\n",
-    "\n",
-    "# ==== 配置区域 ====\n",
-    "FONT_PATH = \"/Users/feidabao/Library/Fonts/SourceHanSansCN-Medium.otf\"  # 标题/文字字体\n",
-    "DATA_FILE = \"data.xlsx\"  # Excel 文件\n",
-    "KV_FOLDER = \"kv_imgs\"  # KV 图片临时保存\n",
-    "OUTPUT_FOLDER = \"output\"  # 输出海报\n",
-    "LEFT_MARGIN = 50  # 左对齐边距\n",
-    "LINE_SPACING = 5  # 行间距\n",
-    "\n",
-    "# 海报宽度\n",
-    "POSTER_WIDTH = 750\n",
-    "\n",
-    "# 接口前缀\n",
-    "SIGN_API_PREFIX = \"你的接口\"\n",
-    "\n",
-    "# ==== 函数：自动换行绘制文字 ====\n",
-    "def draw_wrap_text(draw, text, font, x, y, max_width, fill=\"#000000\"):\n",
-    "    \"\"\"中文逐字拆分自动换行，左对齐\"\"\"\n",
-    "    current_line = \"\"\n",
-    "    current_y = y\n",
-    "    for char in text:\n",
-    "        test_line = current_line + char\n",
-    "        bbox = draw.textbbox((0,0), test_line, font=font)\n",
-    "        w = bbox[2] - bbox[0]\n",
-    "        if w > max_width:\n",
-    "            draw.text((x, current_y), current_line, font=font, fill=fill)\n",
-    "            current_y += font.size + LINE_SPACING\n",
-    "            current_line = char\n",
-    "        else:\n",
-    "            current_line = test_line\n",
-    "    if current_line:\n",
-    "        draw.text((x, current_y), current_line, font=font, fill=fill)\n",
-    "        current_y += font.size + LINE_SPACING\n",
-    "    return current_y  # 返回文字底部 y 坐标\n",
-    "\n",
-    "# ==== 创建文件夹 ====\n",
-    "for folder in [KV_FOLDER, OUTPUT_FOLDER]:\n",
-    "    if not os.path.exists(folder):\n",
-    "        os.makedirs(folder)\n",
-    "\n",
-    "# ==== 读取表格 ====\n",
-    "df = pd.read_excel(DATA_FILE)\n",
-    "print(f\"📑 读取到 {len(df)} 条数据\")\n",
-    "\n",
-    "# ==== 主循环生成海报 ====\n",
-    "for idx, row in df.iterrows():\n",
-    "    title = str(row['title'])\n",
-    "    date = str(row['date'])\n",
-    "    number = str(row['number'])  # 新增————编号\n",
-    "    link = str(row['link'])\n",
-    "    kv_base_url = str(row['kv_image_name'])  # Excel 中存的 URL 前半段\n",
-    "\n",
-    "    # 请求接口获取完整带签名 URL\n",
-    "    try:\n",
-    "        resp = requests.get(SIGN_API_PREFIX + kv_base_url)\n",
-    "        resp.raise_for_status()\n",
-    "        data = resp.json()\n",
-    "        kv_url = data.get(\"limgurl\") or data.get(\"imgurl\")  # 优先使用大图\n",
-    "    except Exception as e:\n",
-    "        print(f\"❌ 图片下载失败: {title}，原因: {e}\")\n",
-    "        continue\n",
-    "\n",
-    "    # 下载 KV 图片到内存\n",
-    "    try:\n",
-    "        img_resp = requests.get(kv_url)\n",
-    "        img_resp.raise_for_status()\n",
-    "        kv_img = Image.open(io.BytesIO(img_resp.content)).convert(\"RGB\")\n",
-    "    except Exception as e:\n",
-    "        print(f\"❌ 图片下载失败: {title}，原因: {e}\")\n",
-    "        continue\n",
-    "\n",
-    "    # KV 图片宽度自适应海报宽度，高度按原比例保留\n",
-    "    kv_w, kv_h = kv_img.size\n",
-    "    new_w = POSTER_WIDTH\n",
-    "    new_h = int(kv_h * (new_w / kv_w))\n",
-    "    kv_img = kv_img.resize((new_w, new_h))  # 宽度撑满海报宽度，高度等比例\n",
-    "\n",
-    "    # 文字字体\n",
-    "    font_title = ImageFont.truetype(FONT_PATH, 40)\n",
-    "    font_date = ImageFont.truetype(FONT_PATH, 24)\n",
-    "    font_number = ImageFont.truetype(FONT_PATH, 20)\n",
-    "    font_tips = ImageFont.truetype(FONT_PATH, 32)\n",
-    "\n",
-    "    # 临时计算标题和日期高度\n",
-    "    temp_img = Image.new(\"RGB\", (new_w, 1000), \"white\")\n",
-    "    draw_temp = ImageDraw.Draw(temp_img)\n",
-    "    text_y = new_h + 35\n",
-    "    text_y = draw_wrap_text(draw=draw_temp, text=title, font=font_title, x=LEFT_MARGIN, y=text_y, max_width=POSTER_WIDTH - 2*LEFT_MARGIN)\n",
-    "    text_y = draw_wrap_text(draw=draw_temp, text=date, font=font_date, x=LEFT_MARGIN, y=text_y + 5, max_width=POSTER_WIDTH - 2*LEFT_MARGIN)\n",
-    "    text_y = draw_wrap_text(draw=draw_temp, text=f\"编号:{number}\", font=font_number, x=LEFT_MARGIN, y=text_y + 5, max_width=POSTER_WIDTH - 2*LEFT_MARGIN)\n",
-    "\n",
-    "    # 二维码和固定文案高度\n",
-    "    qr_size = 400\n",
-    "    tips_height = font_tips.size\n",
-    "    bottom_margin = 20\n",
-    "    extra_bottom_space = 50  # 底部额外白色空间\n",
-    "\n",
-    "    poster_height = text_y + qr_size + tips_height + 3*LINE_SPACING + bottom_margin + extra_bottom_space\n",
-    "\n",
-    "    # 新建海报\n",
-    "    poster = Image.new(\"RGB\", (POSTER_WIDTH, poster_height), \"white\")\n",
-    "    poster.paste(kv_img, (0,0))\n",
-    "    draw = ImageDraw.Draw(poster)\n",
-    "\n",
-    "    # 绘制标题、日期、直播间号\n",
-    "    text_y = new_h + 35\n",
-    "    text_y = draw_wrap_text(draw=draw, text=title, font=font_title, x=LEFT_MARGIN, y=text_y, max_width=POSTER_WIDTH - 2*LEFT_MARGIN, fill=\"#333333\")\n",
-    "    text_y = draw_wrap_text(draw=draw, text=date, font=font_date, x=LEFT_MARGIN, y=text_y + 5, max_width=POSTER_WIDTH - 2*LEFT_MARGIN, fill=\"#999999\")\n",
-    "    text_y = draw_wrap_text(draw=draw, text=f\"编号:{number}\", font=font_number, x=LEFT_MARGIN, y=text_y + 5, max_width=POSTER_WIDTH - 2*LEFT_MARGIN, fill=\"#999999\")\n",
-    "\n",
-    "    # 二维码\n",
-    "    qr = qrcode.make(link)\n",
-    "    qr = qr.resize((qr_size, qr_size))\n",
-    "    qr_y = text_y + 15\n",
-    "    poster.paste(qr, ((POSTER_WIDTH - qr_size)//2, qr_y))\n",
-    "\n",
-    "    # 固定文案居中\n",
-    "    tips_text = \"扫码观看\"\n",
-    "    bbox = draw.textbbox((0,0), tips_text, font=font_tips)\n",
-    "    tw = bbox[2] - bbox[0]\n",
-    "    draw.text(((POSTER_WIDTH - tw)//2, qr_y + qr_size + 15), tips_text, font=font_tips, fill=\"#999999\")\n",
-    "\n",
-    "    # 保存海报\n",
-    "    # 保存海报（防止重名覆盖，使用标题+日期作为文件名）\n",
-    "    safe_title = \"\".join(c if c not in \"/\\\\:*?\\\"<>|\" else \"_\" for c in title)\n",
-    "\n",
-    "    safe_date = \"\".join(c if c not in \"/\\\\:*?\\\"<>|\" else \"_\" for c in date)  # 对日期也做安全处理\n",
-    "\n",
-    "    output_filename = f\"{safe_title}_{safe_date}.jpg\"\n",
-    "    output_path = os.path.join(OUTPUT_FOLDER, output_filename)\n",
-    "    poster.save(output_path, \"JPEG\")\n",
-    "    print(f\"✅ 已生成海报: {title} ({date})\")\n",
-    "\n",
-    "\n",
-    "print(\"\\n🎉 所有海报已生成！请查看 output 文件夹\")"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "ef36c065-fa08-4a02-8a05-a646980fa9f3",
-   "metadata": {},
-   "outputs": [],
-   "source": []
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": "Python [conda env:base] *",
-   "language": "python",
-   "name": "conda-base-py"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.13.5"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 5
-}
+from PIL import Image, ImageDraw, ImageFont
+import pandas as pd
+import qrcode
+import requests
+import io
+import os
+import json
+from urllib.parse import quote
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+# ==== 配置区域 ====
+FONT_PATH = "/Users/feidabao/Library/Fonts/SourceHanSansCN-Medium.otf"
+DATA_FILE = "data.xlsx"
+KV_FOLDER = "kv_imgs"
+OUTPUT_FOLDER = "output"
+LEFT_MARGIN = 50
+LINE_SPACING = 5
+POSTER_WIDTH = 750
+SIGN_API_PREFIX = "你的接口地址"
+
+# ==== 1. 初始化自动重试的网络会话 ====
+def create_robust_session():
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=3, 
+        backoff_factor=0.5, 
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"]
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+session = create_robust_session()
+
+# ==== 函数：自动换行绘制文字 ====
+def draw_wrap_text(draw, text, font, x, y, max_width, fill="#000000"):
+    current_line = ""
+    current_y = y
+    for char in text:
+        test_line = current_line + char
+        bbox = draw.textbbox((0,0), test_line, font=font)
+        w = bbox[2] - bbox[0]
+        if w > max_width:
+            draw.text((x, current_y), current_line, font=font, fill=fill)
+            current_y += font.size + LINE_SPACING
+            current_line = char
+        else:
+            current_line = test_line
+    if current_line:
+        draw.text((x, current_y), current_line, font=font, fill=fill)
+        current_y += font.size + LINE_SPACING
+    return current_y
+
+for folder in [KV_FOLDER, OUTPUT_FOLDER]:
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+
+df = pd.read_excel(DATA_FILE)
+print(f"📑 读取到 {len(df)} 条数据")
+
+# ==== 主循环生成海报 ====
+for idx, row in df.iterrows():
+    title = str(row['title'])
+    date = str(row['date'])
+    number = str(row['number'])
+    link = str(row['link'])
+    kv_base_url = str(row['kv_image_name'])
+
+    # --- 步骤 1：从 API 获取所有可能的 URL ---
+    try:
+        encoded_param = quote(kv_base_url, safe='')
+        full_sign_url = SIGN_API_PREFIX + encoded_param
+        resp = session.get(full_sign_url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        
+        # 将所有备选 URL 放入列表，按优先级排序
+        urls_to_try = []
+        if data.get("imgurl"): urls_to_try.append(data.get("imgurl"))
+        if data.get("limgurl"): urls_to_try.append(data.get("limgurl"))
+        
+    except Exception as e:
+        print(f"❌ 签名接口获取失败: {title}，原因: {e}")
+        continue
+
+    # --- 步骤 2：尝试下载图片（带回退机制） ---
+    kv_img = None
+    last_error = ""
+    
+    for kv_url in urls_to_try:
+        try:
+            img_resp = session.get(kv_url, timeout=20)
+            img_resp.raise_for_status()
+            kv_img = Image.open(io.BytesIO(img_resp.content)).convert("RGB")
+            if kv_img: break # 只要有一个成功就跳出循环
+        except Exception as e:
+            last_error = str(e)
+            print(f"⚠️ 尝试下载失败 (将换个链接再试): {kv_url[:50]}... 原因: {e}")
+            continue
+
+    if kv_img is None:
+        print(f"❌ 彻底失败: {title}。所有 URL 都无法下载。")
+        print(f"   [排查建议]：后端提供的签名 URL 在 OSS 侧报 400，说明该原图无法处理。")
+        continue
+
+    # ==========================================================
+    # 以下布局代码完全保持不变
+    # ==========================================================
+    kv_w, kv_h = kv_img.size
+    new_w = POSTER_WIDTH
+    new_h = int(kv_h * (new_w / kv_w))
+    kv_img = kv_img.resize((new_w, new_h))
+
+    font_title = ImageFont.truetype(FONT_PATH, 40)
+    font_date = ImageFont.truetype(FONT_PATH, 24)
+    font_number = ImageFont.truetype(FONT_PATH, 20)
+    font_tips = ImageFont.truetype(FONT_PATH, 32)
+
+    temp_img = Image.new("RGB", (new_w, 1000), "white")
+    draw_temp = ImageDraw.Draw(temp_img)
+    text_y = new_h + 35
+    text_y = draw_wrap_text(draw=draw_temp, text=title, font=font_title, x=LEFT_MARGIN, y=text_y, max_width=POSTER_WIDTH - 2*LEFT_MARGIN)
+    text_y = draw_wrap_text(draw=draw_temp, text=date, font=font_date, x=LEFT_MARGIN, y=text_y + 5, max_width=POSTER_WIDTH - 2*LEFT_MARGIN)
+    text_y = draw_wrap_text(draw=draw_temp, text=f"直播间号:{number}", font=font_number, x=LEFT_MARGIN, y=text_y + 5, max_width=POSTER_WIDTH - 2*LEFT_MARGIN)
+
+    qr_size = 400
+    tips_height = font_tips.size
+    bottom_margin = 20
+    extra_bottom_space = 50
+
+    poster_height = text_y + qr_size + tips_height + 3*LINE_SPACING + bottom_margin + extra_bottom_space
+
+    poster = Image.new("RGB", (POSTER_WIDTH, poster_height), "white")
+    poster.paste(kv_img, (0,0))
+    draw = ImageDraw.Draw(poster)
+
+    text_y = new_h + 35
+    text_y = draw_wrap_text(draw=draw, text=title, font=font_title, x=LEFT_MARGIN, y=text_y, max_width=POSTER_WIDTH - 2*LEFT_MARGIN, fill="#333333")
+    text_y = draw_wrap_text(draw=draw, text=date, font=font_date, x=LEFT_MARGIN, y=text_y + 5, max_width=POSTER_WIDTH - 2*LEFT_MARGIN, fill="#999999")
+    text_y = draw_wrap_text(draw=draw, text=f"直播间号:{number}", font=font_number, x=LEFT_MARGIN, y=text_y + 5, max_width=POSTER_WIDTH - 2*LEFT_MARGIN, fill="#999999")
+
+    qr = qrcode.make(link)
+    qr = qr.resize((qr_size, qr_size))
+    qr_y = text_y + 15
+    poster.paste(qr, ((POSTER_WIDTH - qr_size)//2, qr_y))
+
+    tips_text = "你的文案"
+    bbox = draw.textbbox((0,0), tips_text, font=font_tips)
+    tw = bbox[2] - bbox[0]
+    draw.text(((POSTER_WIDTH - tw)//2, qr_y + qr_size + 15), tips_text, font=font_tips, fill="#999999")
+
+    safe_title = "".join(c if c not in "/\\:*?\"<>|" else "_" for c in title)
+    safe_date = "".join(c if c not in "/\\:*?\"<>|" else "_" for c in date)
+
+    output_filename = f"{safe_title}_{safe_date}.jpg"
+    output_path = os.path.join(OUTPUT_FOLDER, output_filename)
+    poster.save(output_path, "JPEG")
+    print(f"✅ 已成功生成: {title}")
+
+print("\n🎉 任务结束！")
